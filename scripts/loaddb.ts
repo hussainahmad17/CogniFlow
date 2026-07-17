@@ -11,10 +11,14 @@ const {
     ASTRA_DB_NAMESPACE,
     ASTRA_DB_APPLICATION_TOKEN,
     OPENAI_API_KEY,
-    ASASTRA_DB_API_ENDPOINT,
+    ASTRA_DB_API_ENDPOINT,
     ASTRA_DB_COLLECTION
 } = process.env;
 
+
+const openai = new Openai({
+    apiKey: OPENAI_API_KEY,
+});
 
 const f1Data = [
   "https://en.wikipedia.org/wiki/Formula_One",
@@ -29,3 +33,12 @@ const f1Data = [
   "https://www.formula1.com/en/results.html/2024/races.html",
   "https://www.formula1.com/en/racing/2024.html"
 ];
+
+const client = new DataAPIClient(ASTRA_DB_APPLICATION_TOKEN);
+const db = client.db(ASTRA_DB_API_ENDPOINT, { namespace: ASTRA_DB_NAMESPACE });
+
+const spliter = new RecursiveCharacterTextSplitter({
+    chunkSize: 512,
+    chunkOverlap: 100
+})
+
