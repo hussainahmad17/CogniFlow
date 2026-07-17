@@ -52,3 +52,19 @@ const create_collection = async () => {
     console.log("Collection created:", response);
 }
 
+
+// load the data
+
+const loadData = async () => {
+    const collection = db.collection(ASTRA_DB_COLLECTION);
+    for await (const url of f1Data) {
+        const content = await scrapePage(url);
+        const chunks = await spliter.splitText(content);
+        const embeddings = await openai.embeddings.create({
+            model: "text-embedding-3-large",
+            input: chunks,
+            embedding_format: "float"
+        })
+    }
+}
+
