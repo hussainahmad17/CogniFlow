@@ -63,8 +63,40 @@ const loadData = async () => {
         const embeddings = await openai.embeddings.create({
             model: "text-embedding-3-large",
             input: chunks,
-            embedding_format: "float"
+            encoding_format: "float",
+        })
+        const vector = embeddings.data[0].embedding
+        const res = await collection.insertOne({
+            $vector: vector,
+            text: chunks
         })
     }
 }
 
+
+// scrape the page content
+
+const scrapePage = async (url: string) => {
+    const loader = new PuppeteerWebBaseLoader(url,{
+        launchOptions: {
+            headless: true
+    }, 
+    gotoOptions: {
+        waitUntil: "documentloaded"
+    },
+    evaluate: async (page, browser) => {
+        const results = await page.evaluate(() => document.body.innerHTML)
+        await browser.close();
+        return results;
+    }
+})
+return (await loader.scrape())?.replace(/<[^>]+>/g, '')
+}
+
+
+//  create collectiona and load data
+
+create_collection().then(() => {
+    loadData()}).catch((err) => {
+    console.error("Error creating collection or loading data:", err);
+})
