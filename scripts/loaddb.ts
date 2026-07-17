@@ -42,3 +42,13 @@ const spliter = new RecursiveCharacterTextSplitter({
     chunkOverlap: 100
 })
 
+const create_collection = async () => {
+    const response = await db.createCollection(ASTRA_DB_COLLECTION, {
+        vector: {
+            dimension: 1536,
+            metric: "cosine",
+        }
+    })
+    console.log("Collection created:", response);
+}
+
