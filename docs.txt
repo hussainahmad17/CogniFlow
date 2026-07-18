@@ -1,0 +1,3 @@
+First we have to make the load script
+
+1. define all the data we have
