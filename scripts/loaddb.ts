@@ -1,22 +1,21 @@
-// this files is load data into the database
+// this file loads data into the database
 
 import { DataAPIClient } from "@datastax/astra-db-ts";
-import { PuppeteerWebBaseLoader} from "langchain/document_loaders/web/puppeteer";
-import Openai from "openai";
-import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
-
+import { OpenAI } from "openai";
+import puppeteer from "puppeteer";
 
 import "dotenv/config";
+
 const {
     ASTRA_DB_NAMESPACE,
+    ASTRA_DB_KEYSPACE,
     ASTRA_DB_APPLICATION_TOKEN,
     OPENAI_API_KEY,
     ASTRA_DB_API_ENDPOINT,
-    ASTRA_DB_COLLECTION
+    ASTRA_DB_COLLECTION,
 } = process.env;
 
-
-const openai = new Openai({
+const openai = new OpenAI({
     apiKey: OPENAI_API_KEY,
 });
 
@@ -35,12 +34,33 @@ const f1Data = [
 ];
 
 const client = new DataAPIClient(ASTRA_DB_APPLICATION_TOKEN);
-const db = client.db(ASTRA_DB_API_ENDPOINT, { namespace: ASTRA_DB_NAMESPACE });
+const db = client.db(ASTRA_DB_API_ENDPOINT, {
+    keyspace: ASTRA_DB_KEYSPACE ?? ASTRA_DB_NAMESPACE,
+});
 
-const spliter = new RecursiveCharacterTextSplitter({
-    chunkSize: 512,
-    chunkOverlap: 100
-})
+const chunkText = (content: string) => {
+    const chunkSize = 512;
+    const chunkOverlap = 100;
+    const chunks: string[] = [];
+
+    let start = 0;
+    while (start < content.length) {
+        const end = Math.min(start + chunkSize, content.length);
+        const chunk = content.slice(start, end).trim();
+
+        if (chunk.length > 0) {
+            chunks.push(chunk);
+        }
+
+        if (end >= content.length) {
+            break;
+        }
+
+        start = Math.max(end - chunkOverlap, start + 1);
+    }
+
+    return chunks;
+};
 
 const create_collection = async () => {
     const response = await db.createCollection(ASTRA_DB_COLLECTION, {
@@ -57,19 +77,28 @@ const create_collection = async () => {
 
 const loadData = async () => {
     const collection = db.collection(ASTRA_DB_COLLECTION);
-    for await (const url of f1Data) {
+    for (const url of f1Data) {
         const content = await scrapePage(url);
-        const chunks = await spliter.splitText(content);
+        const chunks = chunkText(content);
         const embeddings = await openai.embeddings.create({
-            model: "text-embedding-3-large",
+            model: "text-embedding-3-small",
             input: chunks,
             encoding_format: "float",
-        })
-        const vector = embeddings.data[0].embedding
-        const res = await collection.insertOne({
-            $vector: vector,
-            text: chunks
-        })
+        });
+
+        for (let index = 0; index < chunks.length; index += 1) {
+            const embedding = embeddings.data[index]?.embedding;
+
+            if (!embedding) {
+                continue;
+            }
+
+            await collection.insertOne({
+                $vector: embedding,
+                text: chunks[index],
+                source: url,
+            });
+        }
     }
 }
 
@@ -77,20 +106,17 @@ const loadData = async () => {
 // scrape the page content
 
 const scrapePage = async (url: string) => {
-    const loader = new PuppeteerWebBaseLoader(url,{
-        launchOptions: {
-            headless: true
-    }, 
-    gotoOptions: {
-        waitUntil: "documentloaded"
-    },
-    evaluate: async (page, browser) => {
-        const results = await page.evaluate(() => document.body.innerHTML)
+    const browser = await puppeteer.launch({ headless: true });
+
+    try {
+        const page = await browser.newPage();
+        await page.goto(url, { waitUntil: "networkidle2" });
+
+        const content = await page.evaluate(() => document.body.innerText);
+        return content.replace(/\s+/g, " ").trim();
+    } finally {
         await browser.close();
-        return results;
     }
-})
-return (await loader.scrape())?.replace(/<[^>]+>/g, '')
 }
 
 
