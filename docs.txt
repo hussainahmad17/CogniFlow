@@ -1,3 +1,7 @@
 First we have to make the load script
 
-1. define all the data we have
+1. define all the data we have.
+2. create the db instence with DataAPIClient
+3. create text spliter
+4. create collection with vector dimension and metic defination
+5. load the data by getting content, then got chunks, embed it and insert vectors into collection/db.
